@@ -62,6 +62,9 @@ class VulkanTriangleApplication {
 		VkDebugUtilsMessengerEXT debugMessenger;
 
 		VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+		VkDevice logicalDevice;
+
+		VkQueue graphicsQueue;
 
 		void initWindow() {
 			glfwInit();
@@ -303,6 +306,45 @@ class VulkanTriangleApplication {
 
 		void createLogicalDevice() {
 			QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+
+			// populate queue creation struct
+			VkDeviceQueueCreateInfo queueCreateInfo{};
+			queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+			queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
+			queueCreateInfo.queueCount = 1;
+
+			float queuePriority = 1.0f;
+			queueCreateInfo.pQueuePriorities = &queuePriority;
+
+			// no specific device features are required for now
+			VkPhysicalDeviceFeatures deviceFeatures{};
+
+			// popuate logical device creation struct
+			VkDeviceCreateInfo createInfo{};
+			createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
+			createInfo.pQueueCreateInfos = &queueCreateInfo;
+			createInfo.queueCreateInfoCount = 1;
+
+			createInfo.pEnabledFeatures = &deviceFeatures;
+
+			// no specific device extensions are required for now
+			createInfo.enabledExtensionCount = 0;
+
+			if (enableValidationLayers) {
+				createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+				createInfo.ppEnabledLayerNames = validationLayers.data();
+			}
+			else {
+				createInfo.enabledLayerCount = 0;
+			}
+
+			if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &logicalDevice) != VK_SUCCESS) {
+				throw std::runtime_error("ERROR: Failed to create logical device");
+			}
+
+			// get queue handles
+			vkGetDeviceQueue(logicalDevice, indices.graphicsFamily.value(), 0, &graphicsQueue);
 		}
 
 		void mainLoop() {
@@ -312,6 +354,8 @@ class VulkanTriangleApplication {
 		}
 
 		void cleanup() {
+			vkDestroyDevice(logicalDevice, nullptr);
+
 			if (enableValidationLayers) {
 				DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
 			}
