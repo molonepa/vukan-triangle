@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <optional>
+#include <set>
 
 const std::vector<const char*> validationLayers = {"VK_LAYER_KHRONOS_validation"};
 
@@ -37,8 +38,10 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 
 struct QueueFamilyIndices {
 	std::optional<uint32_t> graphicsFamily;
+	std::optional<uint32_t> presentFamily;
+
 	bool isComplete() {
-		return graphicsFamily.has_value();
+		return graphicsFamily.has_value() && presentFamily.has_value();
 	}
 };
 
@@ -56,6 +59,7 @@ class VulkanTriangleApplication {
 		const uint32_t HEIGHT = 600;
 
 		GLFWwindow* window;
+		VkSurfaceKHR surface;
 
 		VkInstance instance;
 
@@ -65,6 +69,7 @@ class VulkanTriangleApplication {
 		VkDevice logicalDevice;
 
 		VkQueue graphicsQueue;
+		VkQueue presentQueue;
 
 		void initWindow() {
 			glfwInit();
@@ -81,6 +86,7 @@ class VulkanTriangleApplication {
 		void initVulkan() {
 			createInstance();
 			setupDebugMessenger();
+			createSurface();
 			choosePhysicalDevice();
 			createLogicalDevice();
 		}
@@ -273,8 +279,8 @@ class VulkanTriangleApplication {
 			// get queue families supported by device
 			QueueFamilyIndices indices = findQueueFamilies(device);
 
-			// in this case return true if dedicated GPU and desired queue families supported
-			return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU & indices.isComplete();
+			// in this case return true if device is dedicated GPU and desired queue families are supported
+			return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && indices.isComplete();
 		}
 
 		QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
@@ -287,11 +293,18 @@ class VulkanTriangleApplication {
 			std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
 			vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
-			// find at least one queue family that supports VK_QUEUE_GRAPHICS_BIT
+			// find at least one queue family that supports VK_QUEUE_GRAPHICS_BIT and WSI
 			int i = 0;
 			for (const auto& queueFamily : queueFamilies) {
 				if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
 					indices.graphicsFamily = i;
+				}
+
+				VkBool32 presentSupport = false;
+				vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+
+				if (presentSupport) {
+					indices.presentFamily = i;
 				}
 
 				if (indices.isComplete()) {
@@ -307,14 +320,19 @@ class VulkanTriangleApplication {
 		void createLogicalDevice() {
 			QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 
-			// populate queue creation struct
-			VkDeviceQueueCreateInfo queueCreateInfo{};
-			queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-			queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
-			queueCreateInfo.queueCount = 1;
+			std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+			std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(), indices.presentFamily.value()};
 
+			// populate queue creation struct
 			float queuePriority = 1.0f;
-			queueCreateInfo.pQueuePriorities = &queuePriority;
+			for (uint32_t queueFamily : uniqueQueueFamilies) {
+			VkDeviceQueueCreateInfo queueCreateInfo{};
+				queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+				queueCreateInfo.queueFamilyIndex = queueFamily;
+				queueCreateInfo.queueCount = 1;
+				queueCreateInfo.pQueuePriorities = &queuePriority;
+				queueCreateInfos.push_back(queueCreateInfo);
+			}
 
 			// no specific device features are required for now
 			VkPhysicalDeviceFeatures deviceFeatures{};
@@ -323,8 +341,8 @@ class VulkanTriangleApplication {
 			VkDeviceCreateInfo createInfo{};
 			createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 
-			createInfo.pQueueCreateInfos = &queueCreateInfo;
-			createInfo.queueCreateInfoCount = 1;
+			createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+			createInfo.pQueueCreateInfos = queueCreateInfos.data();
 
 			createInfo.pEnabledFeatures = &deviceFeatures;
 
@@ -345,6 +363,14 @@ class VulkanTriangleApplication {
 
 			// get queue handles
 			vkGetDeviceQueue(logicalDevice, indices.graphicsFamily.value(), 0, &graphicsQueue);
+			vkGetDeviceQueue(logicalDevice, indices.presentFamily.value(), 0, &presentQueue);
+		}
+
+		void createSurface() {
+			// use GLFW to avoid platform specific window surface creation
+			if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
+				throw std::runtime_error("ERROR: Failed to create window surface");
+			}
 		}
 
 		void mainLoop() {
@@ -359,6 +385,8 @@ class VulkanTriangleApplication {
 			if (enableValidationLayers) {
 				DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
 			}
+
+			vkDestroySurfaceKHR(instance, surface, nullptr);
 
 			vkDestroyInstance(instance, nullptr);
 
