@@ -374,8 +374,9 @@ class VulkanTriangleApplication {
 
 			createInfo.pEnabledFeatures = &deviceFeatures;
 
-			// no specific device extensions are required for now
-			createInfo.enabledExtensionCount = 0;
+			// push required device extensions
+			createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+			createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
 			if (enableValidationLayers) {
 				createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
