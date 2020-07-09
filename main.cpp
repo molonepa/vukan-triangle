@@ -10,6 +10,7 @@
 #include <set>
 
 const std::vector<const char*> validationLayers = {"VK_LAYER_KHRONOS_validation"};
+const std::vector<const char*> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 #ifdef NDEBUG
 	const bool enableValidationLayers = false;
@@ -279,8 +280,35 @@ class VulkanTriangleApplication {
 			// get queue families supported by device
 			QueueFamilyIndices indices = findQueueFamilies(device);
 
-			// in this case return true if device is dedicated GPU and desired queue families are supported
-			return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && indices.isComplete();
+			if (!indices.isComplete()) {
+				throw std::runtime_error("ERROR: Required queue families not supported by device");
+			}
+
+			// check whether device supports necessary extensions (e.g. VK_KHR_swapchain extension)
+			bool extensionsSupported = checkDeviceExtensionSupport(device);
+
+			if (!extensionsSupported) {
+				throw std::runtime_error("ERROR: Required device extensions not supported by device");
+			}
+
+			// in this case return true if device is dedicated GPU and passes other checks
+			return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && indices.isComplete() && extensionsSupported;
+		}
+
+		bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
+			uint32_t extensionCount;
+			vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+
+			std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+			vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+			std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
+
+			for (const auto& extension : availableExtensions) {
+				requiredExtensions.erase(extension.extensionName);
+			}
+
+			return requiredExtensions.empty();
 		}
 
 		QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
