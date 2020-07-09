@@ -46,6 +46,12 @@ struct QueueFamilyIndices {
 	}
 };
 
+struct SwapChainSupportDetails {
+	VkSurfaceCapabilitiesKHR capabilities;
+	std::vector<VkSurfaceFormatKHR> formats;
+	std::vector<VkPresentModeKHR> presentModes;
+};
+
 class VulkanTriangleApplication {
 	public:
 		void run() {
@@ -288,11 +294,21 @@ class VulkanTriangleApplication {
 			bool extensionsSupported = checkDeviceExtensionSupport(device);
 
 			if (!extensionsSupported) {
-				throw std::runtime_error("ERROR: Required device extensions not supported by device");
+				throw std::runtime_error("ERROR: Required device extension(s) not supported by device");
+			}
+
+			// check whether device has swapchain support appropriate for surface being used
+			bool swapChainAdequate = false;
+
+			SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
+			swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+
+			if (!swapChainAdequate) {
+				throw std::runtime_error("ERROR: Required swapchain extension(s) not supported by device");
 			}
 
 			// in this case return true if device is dedicated GPU and passes other checks
-			return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && indices.isComplete() && extensionsSupported;
+			return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && indices.isComplete() && extensionsSupported && swapChainAdequate;
 		}
 
 		bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
@@ -343,6 +359,30 @@ class VulkanTriangleApplication {
 			}
 
 			return indices;
+		}
+
+		SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device) {
+			SwapChainSupportDetails details;
+
+			// query surface formats supported by specified device
+			uint32_t formatCount;
+			vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
+
+			if (formatCount != 0) {
+				details.formats.resize(formatCount);
+				vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
+			}
+
+			// query present modes supported by specified device
+			uint32_t presentModeCount;
+			vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
+
+			if (formatCount != 0) {
+				details.presentModes.resize(presentModeCount);
+				vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data());
+			}
+
+			return details;
 		}
 
 		void createLogicalDevice() {
