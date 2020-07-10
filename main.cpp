@@ -74,6 +74,9 @@ class VulkanTriangleApplication {
 		VkDebugUtilsMessengerEXT debugMessenger;
 
 		VkSwapchainKHR swapchain;
+		std::vector<VkImage> swapchainImages;
+		VkFormat swapchainImageFormat;
+		VkExtent2D swapchainExtent;
 
 		VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 		VkDevice logicalDevice;
@@ -498,6 +501,10 @@ class VulkanTriangleApplication {
 				VkPresentModeKHR presentMode = chooseSwapchainPresentMode(swapChainSupport.presentModes);
 				VkExtent2D extent = chooseSwapchainExtent(swapChainSupport.capabilities);
 
+				// store image format and extent in member variables for future use
+				swapchainImageFormat = surfaceFormat.format;
+				swapchainExtent = extent;
+
 				// set swapchain image count to supported minimum + 1 to avoid stalling and ensure it doesn't exceed maximum
 				uint32_t imageCount = swapChainSupport.capabilities.minImageCount +1;
 
@@ -546,6 +553,11 @@ class VulkanTriangleApplication {
 				if (vkCreateSwapchainKHR(logicalDevice, &createInfo, nullptr, &swapchain) != VK_SUCCESS) {
 					throw std::runtime_error("ERROR: Failed to create swapchain");
 				}
+
+				// retrieve images from swapchain and store in vector
+				vkGetSwapchainImagesKHR(logicalDevice, swapchain, &imageCount, nullptr);
+				swapchainImages.resize(imageCount);
+				vkGetSwapchainImagesKHR(logicalDevice, swapchain, &imageCount, swapchainImages.data());
 			}
 
 		void mainLoop() {
