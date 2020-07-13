@@ -99,6 +99,7 @@ class VulkanTriangleApplication {
 		VkSwapchainKHR swapchain;
 		std::vector<VkImage> swapchainImages;
 		std::vector<VkImageView> swapchainImageViews;
+		std::vector<VkFramebuffer> swapchainFramebuffers;
 		VkFormat swapchainImageFormat;
 		VkExtent2D swapchainExtent;
 
@@ -134,6 +135,7 @@ class VulkanTriangleApplication {
 			createImageViews();
 			createRenderPass();
 			createGraphicsPipeline();
+			createFramebuffers();
 		}
 
 		void createInstance() {
@@ -829,6 +831,28 @@ class VulkanTriangleApplication {
 			}
 		}
 
+		void createFramebuffers() {
+			swapchainFramebuffers.resize(swapchainImageViews.size());
+
+			// create a framebuffer for each image view
+			for (size_t i = 0; i < swapchainImageViews.size(); i++) {
+				VkImageView attachments[] = {swapchainImageViews[i]};
+
+				VkFramebufferCreateInfo framebufferCreateInfo{};
+				framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+				framebufferCreateInfo.renderPass = renderPass;
+				framebufferCreateInfo.attachmentCount = 1;
+				framebufferCreateInfo.pAttachments = attachments;
+				framebufferCreateInfo.width = swapchainExtent.width;
+				framebufferCreateInfo.height = swapchainExtent.height;
+				framebufferCreateInfo.layers = 1;
+
+				if (vkCreateFramebuffer(logicalDevice, &framebufferCreateInfo, nullptr, &swapchainFramebuffers[i]) != VK_SUCCESS) {
+					throw std::runtime_error("ERROR: Failed to create framebuffer");
+				}
+			}
+		}
+
 		void mainLoop() {
 			while (!glfwWindowShouldClose(window)) {
 				glfwPollEvents();
@@ -836,6 +860,10 @@ class VulkanTriangleApplication {
 		}
 
 		void cleanup() {
+			for (auto framebuffer : swapchainFramebuffers) {
+				vkDestroyFramebuffer(logicalDevice, framebuffer, nullptr);
+			}
+
 			vkDestroyPipeline(logicalDevice, graphicsPipeline, nullptr);
 
 			vkDestroyPipelineLayout(logicalDevice, pipelineLayout, nullptr);
