@@ -108,6 +108,7 @@ class VulkanTriangleApplication {
 		VkQueue graphicsQueue;
 		VkQueue presentQueue;
 
+		VkRenderPass renderPass;
 		VkPipelineLayout pipelineLayout;
 
 		void initWindow() {
@@ -130,6 +131,7 @@ class VulkanTriangleApplication {
 			createLogicalDevice();
 			createSwapChain();
 			createImageViews();
+			createRenderPass();
 			createGraphicsPipeline();
 		}
 
@@ -762,6 +764,41 @@ class VulkanTriangleApplication {
 			return shaderModule;
 		}
 
+		void createRenderPass() {
+			VkAttachmentDescription colourAttachment{};
+			colourAttachment.format = swapchainImageFormat;
+			colourAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+
+			colourAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // clear framebuffer to black before drawing new frame
+			colourAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+			colourAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			colourAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+
+			colourAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			colourAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+			VkAttachmentReference colourAttachmentRef{};
+			colourAttachmentRef.attachment = 0;
+			colourAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+			VkSubpassDescription subpass{};
+			subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+			subpass.colorAttachmentCount = 1;
+			subpass.pColorAttachments = &colourAttachmentRef;
+
+			VkRenderPassCreateInfo renderPassCreateInfo{};
+			renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+			renderPassCreateInfo.attachmentCount = 1;
+			renderPassCreateInfo.pAttachments = &colourAttachment;
+			renderPassCreateInfo.subpassCount = 1;
+			renderPassCreateInfo.pSubpasses = &subpass;
+
+			if (vkCreateRenderPass(logicalDevice, &renderPassCreateInfo, nullptr, &renderPass) != VK_SUCCESS) {
+				throw std::runtime_error("ERROR: Failed to create render pass");
+			}
+		}
+
 		void mainLoop() {
 			while (!glfwWindowShouldClose(window)) {
 				glfwPollEvents();
@@ -770,6 +807,8 @@ class VulkanTriangleApplication {
 
 		void cleanup() {
 			vkDestroyPipelineLayout(logicalDevice, pipelineLayout, nullptr);
+
+			vkDestroyRenderPass(logicalDevice, renderPass, nullptr);
 
 			for (auto imageView : swapchainImageViews) {
 				vkDestroyImageView(logicalDevice, imageView, nullptr);
