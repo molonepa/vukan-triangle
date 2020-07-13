@@ -113,6 +113,9 @@ class VulkanTriangleApplication {
 		VkPipelineLayout pipelineLayout;
 		VkPipeline graphicsPipeline;
 
+		VkCommandPool commandPool;
+		std::vector<VkCommandBuffer> commandBuffers;
+
 		void initWindow() {
 			glfwInit();
 
@@ -136,6 +139,8 @@ class VulkanTriangleApplication {
 			createRenderPass();
 			createGraphicsPipeline();
 			createFramebuffers();
+			createCommandPool();
+			createCommandBuffers();
 		}
 
 		void createInstance() {
@@ -729,11 +734,11 @@ class VulkanTriangleApplication {
 			colourBlendCreateInfo.blendConstants[3] = 0.0f;
 
 			// dynamic state configuration
-			VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH}; // some states of the pipeline can be dynamically changed without creating a new pipeline (e.g. viewport size, line width)
-			VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo{};
-			dynamicStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-			dynamicStateCreateInfo.dynamicStateCount = 2;
-			dynamicStateCreateInfo.pDynamicStates = dynamicStates;
+			//VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH}; // some states of the pipeline can be dynamically changed without creating a new pipeline (e.g. viewport size, line width)
+			//VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo{};
+			//dynamicStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+			//dynamicStateCreateInfo.dynamicStateCount = 2;
+			//dynamicStateCreateInfo.pDynamicStates = dynamicStates;
 
 			// pipeline layout creation
 			VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
@@ -760,8 +765,8 @@ class VulkanTriangleApplication {
 			graphicsPipelineCreateInfo.pMultisampleState = &multiSamplingCreateInfo;
 			graphicsPipelineCreateInfo.pDepthStencilState = nullptr;
 			graphicsPipelineCreateInfo.pColorBlendState = &colourBlendCreateInfo;
-			//graphicsPipelineCreateInfo.pDynamicState = nullptr;
-			graphicsPipelineCreateInfo.pDynamicState = &dynamicStateCreateInfo;
+			graphicsPipelineCreateInfo.pDynamicState = nullptr;
+			//graphicsPipelineCreateInfo.pDynamicState = &dynamicStateCreateInfo;
 
 			graphicsPipelineCreateInfo.layout = pipelineLayout;
 
@@ -853,6 +858,68 @@ class VulkanTriangleApplication {
 			}
 		}
 
+		void createCommandPool() {
+			QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
+
+			VkCommandPoolCreateInfo commandPoolCreateInfo{};
+			commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+			commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+			commandPoolCreateInfo.flags = 0;
+
+			if (vkCreateCommandPool(logicalDevice, &commandPoolCreateInfo, nullptr, &commandPool) != VK_SUCCESS) {
+				throw std::runtime_error("ERROR: Failed to create command pool");
+			}
+		}
+
+		void createCommandBuffers() {
+			commandBuffers.resize(swapchainFramebuffers.size());
+
+			VkCommandBufferAllocateInfo allocateInfo{};
+			allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			allocateInfo.commandPool = commandPool;
+			allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			allocateInfo.commandBufferCount = (uint32_t) commandBuffers.size();
+
+			if (vkAllocateCommandBuffers(logicalDevice, &allocateInfo, commandBuffers.data()) != VK_SUCCESS) {
+				throw std::runtime_error("ERROR: Failed to allocate command buffers");
+			}
+
+			for (size_t i = 0; i < commandBuffers.size(); i++) {
+				VkCommandBufferBeginInfo beginInfo{};
+				beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+				beginInfo.flags = 0;
+				beginInfo.pInheritanceInfo = nullptr;
+
+				if (vkBeginCommandBuffer(commandBuffers[i], &beginInfo) != VK_SUCCESS) {
+					throw std::runtime_error("ERROR: Failed to begin recording command buffer");
+				}
+
+				VkRenderPassBeginInfo renderPassInfo{};
+				renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+				renderPassInfo.renderPass = renderPass;
+				renderPassInfo.framebuffer = swapchainFramebuffers[i];
+
+				renderPassInfo.renderArea.offset = {0, 0};
+				renderPassInfo.renderArea.extent = swapchainExtent;
+
+				VkClearValue clearColour = {0.3f, 0.5f, 0.8f, 1.0f};
+				renderPassInfo.clearValueCount = 1;
+				renderPassInfo.pClearValues = &clearColour;
+
+				vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+				vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
+				vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
+
+				vkCmdEndRenderPass(commandBuffers[i]);
+
+				if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS) {
+					throw std::runtime_error("ERROR: Failed to record command buffer");
+				}
+			}
+		}
+
 		void mainLoop() {
 			while (!glfwWindowShouldClose(window)) {
 				glfwPollEvents();
@@ -860,6 +927,8 @@ class VulkanTriangleApplication {
 		}
 
 		void cleanup() {
+			vkDestroyCommandPool(logicalDevice, commandPool, nullptr);
+
 			for (auto framebuffer : swapchainFramebuffers) {
 				vkDestroyFramebuffer(logicalDevice, framebuffer, nullptr);
 			}
