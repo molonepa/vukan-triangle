@@ -110,6 +110,7 @@ class VulkanTriangleApplication {
 
 		VkRenderPass renderPass;
 		VkPipelineLayout pipelineLayout;
+		VkPipeline graphicsPipeline;
 
 		void initWindow() {
 			glfwInit();
@@ -732,6 +733,7 @@ class VulkanTriangleApplication {
 			dynamicStateCreateInfo.dynamicStateCount = 2;
 			dynamicStateCreateInfo.pDynamicStates = dynamicStates;
 
+			// pipeline layout creation
 			VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
 			pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 			pipelineLayoutCreateInfo.setLayoutCount = 0;
@@ -741,6 +743,34 @@ class VulkanTriangleApplication {
 
 			if (vkCreatePipelineLayout(logicalDevice, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
 				throw std::runtime_error("ERROR: Failed to create graphics pipeline layout");
+			}
+
+			// pipeline creation
+			VkGraphicsPipelineCreateInfo graphicsPipelineCreateInfo{};
+			graphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+			graphicsPipelineCreateInfo.stageCount = 2;
+			graphicsPipelineCreateInfo.pStages = shaderStages;
+
+			graphicsPipelineCreateInfo.pVertexInputState = &vertexInputInfo;
+			graphicsPipelineCreateInfo.pInputAssemblyState = &inputAssemblyCreateInfo;
+			graphicsPipelineCreateInfo.pViewportState = &viewportStateCreateInfo;
+			graphicsPipelineCreateInfo.pRasterizationState = &rasterizerCreateInfo;
+			graphicsPipelineCreateInfo.pMultisampleState = &multiSamplingCreateInfo;
+			graphicsPipelineCreateInfo.pDepthStencilState = nullptr;
+			graphicsPipelineCreateInfo.pColorBlendState = &colourBlendCreateInfo;
+			//graphicsPipelineCreateInfo.pDynamicState = nullptr;
+			graphicsPipelineCreateInfo.pDynamicState = &dynamicStateCreateInfo;
+
+			graphicsPipelineCreateInfo.layout = pipelineLayout;
+
+			graphicsPipelineCreateInfo.renderPass = renderPass;
+			graphicsPipelineCreateInfo.subpass = 0;
+
+			graphicsPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+			graphicsPipelineCreateInfo.basePipelineIndex = -1;
+
+			if (vkCreateGraphicsPipelines(logicalDevice, VK_NULL_HANDLE, 1, &graphicsPipelineCreateInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
+				throw std::runtime_error("ERROR: Failed to create graphics pipeline");
 			}
 
 			// clean up shader module objects
@@ -806,6 +836,8 @@ class VulkanTriangleApplication {
 		}
 
 		void cleanup() {
+			vkDestroyPipeline(logicalDevice, graphicsPipeline, nullptr);
+
 			vkDestroyPipelineLayout(logicalDevice, pipelineLayout, nullptr);
 
 			vkDestroyRenderPass(logicalDevice, renderPass, nullptr);
