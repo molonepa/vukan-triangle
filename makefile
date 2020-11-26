@@ -1,4 +1,4 @@
-VULKAN_SDK_PATH = ~/vulkan/1.2.141.2/x86_64
+VULKAN_SDK_PATH = ~/VulkanSDK/1.2.148.1/x86_64
 
 CFLAGS = -std=c++17 -I$(VULKAN_SDK_PATH)/include
 
